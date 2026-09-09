@@ -1,0 +1,3 @@
+# Extra deps beyond the shared ../requirements.txt at repo root.
+langchain-neo4j
+langchain-experimental

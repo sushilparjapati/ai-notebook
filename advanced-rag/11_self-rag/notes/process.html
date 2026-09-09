@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Self-RAG — Visual Revision Notes</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>%F0%9F%AA%9E</text></svg>">
+<style>
+  :root{
+    --bg:#EEF0EA; --surface:#FFFFFF; --surface-2:#F4F5F0;
+    --ink:#1B2131; --ink-soft:#525A6B; --ink-faint:#8A8F7E; --rule:#D8D9CC;
+    --accent:#2E3F76; --accent-soft:#DEE3F2; --accent-strong:#1D2A57;
+    --stamp:#B23A2E; --stamp-soft:#F4DEDB;
+    --good:#2F7A4D; --good-soft:#DCEFE1;
+    --amber:#A9761F; --amber-soft:#F3E7D0;
+    --bad:#B23A2E; --bad-soft:#F4DEDB;
+    --shadow: 0 1px 2px rgba(27,33,49,0.06), 0 6px 20px rgba(27,33,49,0.05);
+    --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#14171B; --surface:#1B1F24; --surface-2:#20242A;
+      --ink:#E9EAE3; --ink-soft:#A6AC9E; --ink-faint:#6E7468; --rule:#33372F;
+      --accent:#8DA0E8; --accent-soft:#232B45; --accent-strong:#B7C4F2;
+      --stamp:#E2685C; --stamp-soft:#3A2320;
+      --good:#63C08A; --good-soft:#1E3126;
+      --amber:#E0AC4C; --amber-soft:#332A16;
+      --bad:#E2685C; --bad-soft:#3A2320;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{ background:var(--bg); color:var(--ink); font-family:var(--sans); line-height:1.55; -webkit-font-smoothing:antialiased; }
+  ::selection{background:var(--accent-soft); color:var(--ink);}
+  .page{max-width:900px;margin:0 auto;padding:64px 24px 96px;}
+
+  header.hero{ display:flex; align-items:flex-start; justify-content:space-between; gap:24px; padding-bottom:36px; border-bottom:1px solid var(--rule); margin-bottom:44px; }
+  .eyebrow{ font-family:var(--mono); font-size:11.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); margin:0 0 10px; }
+  h1{ font-family:var(--serif); font-weight:600; font-size:clamp(32px,5vw,44px); margin:0 0 10px; text-wrap:balance; letter-spacing:-0.01em; color:var(--ink); }
+  .dek{ color:var(--ink-soft); font-size:16px; max-width:54ch; margin:0; }
+  .stamp{ flex:none; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); border:2px solid var(--accent); border-radius:6px; padding:10px 14px; transform:rotate(4deg); white-space:nowrap; opacity:.9; margin-top:6px; }
+
+  section{ margin:0 0 56px; }
+  .s-head{ display:flex; align-items:baseline; gap:12px; margin-bottom:18px; }
+  h2{ font-family:var(--serif); font-size:23px; font-weight:600; margin:0; color:var(--ink); }
+  .s-lede{ color:var(--ink-soft); font-size:15px; margin:-8px 0 20px; max-width:64ch; }
+  .scroller{ overflow-x:auto; padding-bottom:4px; }
+
+  .compare{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:640px){ .compare{ grid-template-columns:1fr; } }
+  .cmp-card{ background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:20px; box-shadow:var(--shadow); }
+  .cmp-title{ display:flex; align-items:center; gap:8px; font-family:var(--serif); font-size:16px; font-weight:600; margin:0 0 4px;}
+  .badge{ display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; font-size:12px; flex:none; }
+  .badge.no{ background:var(--bad-soft); color:var(--bad); }
+  .badge.yes{ background:var(--good-soft); color:var(--good); }
+  .cmp-sub{ font-size:13px; color:var(--ink-soft); margin:0 0 16px; }
+  .mini-flow{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .node{ font-family:var(--mono); font-size:12px; background:var(--surface-2); border:1px solid var(--rule); border-radius:6px; padding:6px 10px; color:var(--ink); }
+  .node.hot{ border-color:var(--accent); color:var(--accent); background:var(--accent-soft); font-weight:600; }
+  .arrow{ color:var(--ink-faint); font-size:14px; }
+  .cmp-note{ margin-top:14px; font-size:13px; color:var(--ink-soft); border-top:1px dashed var(--rule); padding-top:12px; }
+  .cmp-note b{ color:var(--ink); }
+
+  /* token cards */
+  .tokens{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+  @media (max-width:760px){ .tokens{ grid-template-columns:repeat(2,1fr); } }
+  .token-card{ background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:16px; box-shadow:var(--shadow); text-align:center; }
+  .token-name{ font-family:var(--mono); font-weight:700; font-size:13px; color:var(--accent); margin-bottom:6px; }
+  .token-q{ font-size:12.5px; color:var(--ink-soft); }
+
+  .icon{ width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+
+  .pipeline{ display:flex; align-items:stretch; gap:0; min-width:820px; }
+  .p-node{ flex:1; min-width:110px; background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:14px 12px; box-shadow:var(--shadow); text-align:center; display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .p-node .icon{ color:var(--accent); }
+  .p-node b{ font-size:12.5px; }
+  .p-node span.sub{ font-size:11px; color:var(--ink-faint); }
+  .p-arrow{ display:flex; align-items:center; justify-content:center; width:26px; color:var(--ink-faint); font-size:16px; flex:none; }
+
+  /* verify/loop demo */
+  .loop-demo{ background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:20px; box-shadow:var(--shadow); }
+  .loop-q{ font-family:var(--mono); font-size:12.5px; color:var(--ink-faint); margin-bottom:14px; }
+  .loop-q em{ color:var(--ink); font-style:normal; font-weight:600; }
+  .loop-row{ display:flex; gap:12px; align-items:stretch; flex-wrap:wrap; }
+  .loop-col{ flex:1; min-width:220px; border:1px solid var(--rule); border-radius:8px; padding:12px 14px; }
+  .loop-col.bad{ background:var(--bad-soft); }
+  .loop-col.good{ background:var(--good-soft); }
+  .loop-tag{ font-family:var(--mono); font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; display:block; }
+  .loop-col.bad .loop-tag{ color:var(--bad); }
+  .loop-col.good .loop-tag{ color:var(--good); }
+  .loop-txt{ font-size:13px; }
+  .loop-mid{ display:flex; align-items:center; justify-content:center; color:var(--ink-faint); font-size:18px; padding:0 4px; }
+
+  .verdict-row{ display:flex; gap:16px; margin-top:16px; }
+  @media (max-width:640px){ .verdict-row{ flex-direction:column; } }
+  .verdict-col{ flex:1; background:var(--surface-2); border:1px solid var(--rule); border-radius:8px; padding:14px; }
+  .verdict-q{ font-family:var(--mono); font-size:11.5px; color:var(--ink-faint); margin-bottom:6px; }
+  .verdict-a{ font-size:13px; margin-bottom:8px; }
+  .verdict-tag{ display:inline-block; font-family:var(--mono); font-size:11px; font-weight:700; padding:3px 8px; border-radius:5px; }
+  .verdict-tag.good{ background:var(--good-soft); color:var(--good); }
+  .verdict-tag.bad{ background:var(--bad-soft); color:var(--bad); }
+
+  .timeline{ position:relative; padding-left:28px; }
+  .timeline::before{ content:""; position:absolute; left:9px; top:6px; bottom:6px; width:2px; background:var(--rule); }
+  .t-item{ position:relative; padding-bottom:26px; }
+  .t-item:last-child{ padding-bottom:0; }
+  .t-item.branch{ margin-left:14px; }
+  .t-item.branch::before{ content:""; position:absolute; left:-42px; top:10px; width:20px; height:2px; background:var(--rule); }
+  .t-dot{ position:absolute; left:-28px; top:2px; width:20px; height:20px; border-radius:50%; background:var(--accent-soft); border:2px solid var(--accent); color:var(--accent); font-family:var(--mono); font-size:10px; display:flex; align-items:center; justify-content:center; font-weight:700; }
+  .t-item.branch .t-dot{ background:var(--amber-soft); border-color:var(--amber); color:var(--amber); }
+  .t-file{ font-family:var(--mono); font-size:11.5px; color:var(--ink-faint); margin-bottom:2px; }
+  .t-title{ font-weight:600; font-size:14.5px; margin-bottom:3px; }
+  .t-desc{ font-size:13.5px; color:var(--ink-soft); }
+
+  .glossary{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+  @media (max-width:640px){ .glossary{ grid-template-columns:1fr; } }
+  .term-card{ background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:14px 16px; box-shadow:var(--shadow); }
+  .term{ font-family:var(--mono); font-size:13px; color:var(--accent); font-weight:700; margin-bottom:4px; }
+  .term-def{ font-size:13px; color:var(--ink-soft); }
+
+  details.qa{ background:var(--surface); border:1px solid var(--rule); border-radius:9px; padding:2px 16px; margin-bottom:10px; box-shadow:var(--shadow); }
+  details.qa summary{ cursor:pointer; list-style:none; padding:14px 0; font-size:14.5px; font-weight:600; display:flex; gap:10px; align-items:center; }
+  details.qa summary::-webkit-details-marker{ display:none; }
+  details.qa summary::before{ content:"Q"; font-family:var(--mono); font-size:11px; color:var(--accent); background:var(--accent-soft); width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex:none; }
+  details.qa[open] summary::before{ content:"–"; }
+  details.qa .a{ padding:0 0 16px 30px; font-size:13.5px; color:var(--ink-soft); }
+
+  footer{ margin-top:40px; padding-top:20px; border-top:1px solid var(--rule); font-size:12.5px; color:var(--ink-faint); font-family:var(--mono); }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Revision Notes · RAG Series</p>
+      <h1>Self-RAG</h1>
+      <p class="dek">The model grades its own retrieval and its own answer — inline, with reflection tokens, no external evaluator.</p>
+    </div>
+    <div class="stamp">Self-Reflective</div>
+  </header>
+
+  <!-- 1. WHY -->
+  <section>
+    <div class="s-head"><h2>Why let the model grade itself?</h2></div>
+    <p class="s-lede">CRAG's evaluator sits outside the model. Self-RAG pushes the same instinct — check before you trust — inside the model's own turn, both before and after it answers.</p>
+    <div class="compare">
+      <div class="cmp-card">
+        <p class="cmp-title"><span class="badge no">✕</span> Naive RAG</p>
+        <p class="cmp-sub">retrieves every time, never re-checks</p>
+        <div class="mini-flow">
+          <span class="node">question</span><span class="arrow">→</span>
+          <span class="node">always retrieve</span><span class="arrow">→</span>
+          <span class="node hot">generate</span>
+        </div>
+        <p class="cmp-note">Even a general-knowledge question pays the retrieval cost, and the final answer is never re-examined.</p>
+      </div>
+      <div class="cmp-card">
+        <p class="cmp-title"><span class="badge yes">✓</span> Self-RAG</p>
+        <p class="cmp-sub">decides, then double-checks itself</p>
+        <div class="mini-flow">
+          <span class="node">question</span><span class="arrow">→</span>
+          <span class="node hot">Retrieve?</span><span class="arrow">→</span>
+          <span class="node">generate</span><span class="arrow">→</span>
+          <span class="node hot">ISSUP / ISUSE</span>
+        </div>
+        <p class="cmp-note">Skips retrieval when unneeded; after answering, checks its own grounding <b>and</b> usefulness before returning.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. TOKENS -->
+  <section>
+    <div class="s-head"><h2>The four reflection tokens</h2></div>
+    <p class="s-lede">Each is a small structured decision the model makes about its own process, at a different point in the turn.</p>
+    <div class="tokens">
+      <div class="token-card"><div class="token-name">Retrieve</div><div class="token-q">do I even need documents for this?</div></div>
+      <div class="token-card"><div class="token-name">ISREL</div><div class="token-q">is this specific chunk relevant?</div></div>
+      <div class="token-card"><div class="token-name">ISSUP</div><div class="token-q">is my answer supported by context?</div></div>
+      <div class="token-card"><div class="token-name">ISUSE</div><div class="token-q">does my answer actually help?</div></div>
+    </div>
+  </section>
+
+  <!-- 3. RETRIEVE -->
+  <section>
+    <div class="s-head"><h2>Retrieve — skip it when it isn't needed</h2></div>
+    <p class="s-lede">Real run from <code>self_rag_step1.ipynb</code>.</p>
+    <div class="verdict-row">
+      <div class="verdict-col">
+        <div class="verdict-q">"What is Machine Learning"</div>
+        <div class="verdict-a">→ answered directly from general knowledge, no documents touched</div>
+        <span class="verdict-tag bad">should_retrieve: False</span>
+      </div>
+      <div class="verdict-col">
+        <div class="verdict-q">"Who is the CEO of NexaAI"</div>
+        <div class="verdict-a">→ retrieval kicks in — this needs a specific, internal fact</div>
+        <span class="verdict-tag good">should_retrieve: True</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. ISREL -->
+  <section>
+    <div class="s-head"><h2>ISREL — keep only the relevant chunks</h2></div>
+    <p class="s-lede">Real run, question = <em>"Who is the CEO of NexaAI"</em> (<code>self_rag_step2.ipynb</code>) — 4 chunks retrieved, judged one at a time.</p>
+    <div class="loop-demo">
+      <div class="loop-row">
+        <div class="loop-col good"><span class="loop-tag">kept</span><span class="loop-txt">"Founder — Aarav Mehta founded NexaAI… Aarav Mehta – CEO &amp; Founder…"</span></div>
+        <div class="loop-col bad"><span class="loop-tag">dropped</span><span class="loop-txt">Company Overview chunk — founding year, HQ, employee count (real, but not about the CEO)</span></div>
+        <div class="loop-col bad"><span class="loop-tag">dropped</span><span class="loop-txt">Products &amp; Pricing chunks — unrelated topic entirely</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. ISSUP -->
+  <section>
+    <div class="s-head"><h2>ISSUP — verify → revise loop</h2></div>
+    <p class="s-lede">After generating, Self-RAG checks the exact wording of the answer against the context — not just "on topic," but "literally supported."</p>
+    <div class="scroller">
+      <div class="pipeline">
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M4 5 h16 v10 h-9 l-4 4 v-4 h-3 z"/></svg>
+          <b>Generate</b><span class="sub">from kept chunks</span>
+        </div>
+        <div class="p-arrow">→</div>
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="7,12 10.5,15.5 17,8"/></svg>
+          <b>ISSUP</b><span class="sub">grounded?</span>
+        </div>
+        <div class="p-arrow">→</div>
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M4 20 L14 10 L17 13 L7 23 Z"/><line x1="14" y1="10" x2="17" y2="13"/></svg>
+          <b>revise_answer</b><span class="sub">quote-only, loop back</span>
+        </div>
+        <div class="p-arrow">→</div>
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="7,12 10.5,15.5 17,8"/></svg>
+          <b>ISSUP</b><span class="sub">re-check</span>
+        </div>
+        <div class="p-arrow">→</div>
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><polyline points="8,12 11,15 16,9"/></svg>
+          <b>accepted</b><span class="sub">fully_supported</span>
+        </div>
+      </div>
+    </div>
+    <p class="s-lede" style="margin-top:16px;">Real run, question = <em>"Describe NexaAI's company culture"</em> (<code>self_rag_step5.ipynb</code>):</p>
+    <div class="loop-demo">
+      <div class="loop-row">
+        <div class="loop-col bad"><span class="loop-tag">1st draft — no_support</span><span class="loop-txt">free-text summary using words like "culture" that weren't literally in the source</span></div>
+        <div class="loop-mid">→</div>
+        <div class="loop-col good"><span class="loop-tag">after 1 revise — fully_supported</span><span class="loop-txt">"NexaAI is committed to maintaining a fair, inclusive, and performance-driven workplace." / "Employees are encouraged to maintain a healthy work-life balance." (quote-only)</span></div>
+      </div>
+      <div class="recompose" style="margin-top:14px; padding-top:14px; border-top:1px dashed var(--rule); font-size:13px; color:var(--ink-soft);">
+        <b style="display:block; margin-bottom:6px; color:var(--ink); font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.05em;">Worth knowing</b>
+        For <em>"Do NexaAI plans include a free trial?"</em>, the factually correct answer ("Yes, 14 days") was still marked <code>no_support</code> — ISSUP checks literal textual grounding, not truth.
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. ISUSE -->
+  <section>
+    <div class="s-head"><h2>ISUSE — is the grounded answer actually useful?</h2></div>
+    <p class="s-lede">A grounded answer can still dodge the question. ISUSE checks that separately, and can trigger a query rewrite + re-retrieve instead of just a re-answer.</p>
+    <div class="verdict-row">
+      <div class="verdict-col">
+        <div class="verdict-q">"Describe NexaAI's company culture" (step7)</div>
+        <div class="verdict-a">fully_supported → "The answer provides specific details about NexaAI's company culture."</div>
+        <span class="verdict-tag good">isuse: useful → END</span>
+      </div>
+      <div class="verdict-col">
+        <div class="verdict-q">"What is refund policy of NexaAI" (step6)</div>
+        <div class="verdict-a">burns all 10 ISSUP retries, still unsupported — corpus genuinely has no refund policy chunk</div>
+        <span class="verdict-tag bad">isuse: not_useful → no_answer_found</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. WEB BRANCH -->
+  <section>
+    <div class="s-head"><h2>The web branch — a different corrective action</h2></div>
+    <p class="s-lede"><code>self_rag_web.ipynb</code> forks off step 3: instead of ending at "no relevant docs," it rewrites the query, calls web search, and loops the results back through ISREL.</p>
+    <div class="scroller">
+      <div class="pipeline">
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><line x1="15" y1="15" x2="20" y2="20"/></svg>
+          <b>Retrieve</b><span class="sub">internal docs</span>
+        </div>
+        <div class="p-arrow">→</div>
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="7,12 10.5,15.5 17,8"/></svg>
+          <b>ISREL</b><span class="sub">any relevant?</span>
+        </div>
+        <div class="p-arrow">→</div>
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M4 20 L14 10 L17 13 L7 23 Z"/><line x1="14" y1="10" x2="17" y2="13"/></svg>
+          <b>rewrite_query</b><span class="sub">none relevant</span>
+        </div>
+        <div class="p-arrow">→</div>
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><line x1="3" y1="12" x2="21" y2="12"/></svg>
+          <b>web_search</b><span class="sub">Tavily</span>
+        </div>
+        <div class="p-arrow">→</div>
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="7,12 10.5,15.5 17,8"/></svg>
+          <b>ISREL</b><span class="sub">loop again</span>
+        </div>
+      </div>
+    </div>
+    <p class="s-lede" style="margin-top:16px;">Real run: <em>"Who won the Aus vs Zim World T20 match 2026 and who was the top scorer"</em> — clearly outside the internal PDFs, so the loop falls through to web search, keeps all 5 web results as relevant, and generates a grounded answer citing the match.</p>
+  </section>
+
+  <!-- 8. BUILD PROGRESSION -->
+  <section>
+    <div class="s-head"><h2>How it was built, one notebook at a time</h2></div>
+    <div class="timeline">
+      <div class="t-item"><div class="t-dot">1</div><div class="t-file">self_rag_step1.ipynb</div><div class="t-title">Retrieve gate</div><div class="t-desc">Skip retrieval for general-knowledge questions.</div></div>
+      <div class="t-item"><div class="t-dot">2</div><div class="t-file">self_rag_step2.ipynb</div><div class="t-title">+ ISREL</div><div class="t-desc">Per-chunk relevance filter.</div></div>
+      <div class="t-item"><div class="t-dot">3</div><div class="t-file">self_rag_step3.ipynb</div><div class="t-title">+ generate_from_context</div><div class="t-desc">Answer from filtered context; explicit "no relevant document found" fallback.</div></div>
+      <div class="t-item"><div class="t-dot">4</div><div class="t-file">self_rag_step4.ipynb</div><div class="t-title">+ ISSUP (check-only)</div><div class="t-desc">Verify grounding, but don't act on it yet.</div></div>
+      <div class="t-item"><div class="t-dot">5</div><div class="t-file">self_rag_step5.ipynb</div><div class="t-title">+ ISSUP revise loop</div><div class="t-desc">Rewrite the answer (quote-only) until supported or out of retries.</div></div>
+      <div class="t-item"><div class="t-dot">6</div><div class="t-file">self_rag_step6.ipynb</div><div class="t-title">+ ISUSE</div><div class="t-desc">Usefulness check after grounding passes.</div></div>
+      <div class="t-item"><div class="t-dot">7</div><div class="t-file">self_rag_step7.ipynb</div><div class="t-title">+ rewrite_question loop</div><div class="t-desc">ISUSE failure triggers a query rewrite and a fresh retrieval attempt.</div></div>
+      <div class="t-item branch"><div class="t-dot">W</div><div class="t-file">self_rag_web.ipynb</div><div class="t-title">branch: web fallback</div><div class="t-desc">Replaces the no-relevant-docs dead-end with a web search, looped back through ISREL.</div></div>
+    </div>
+  </section>
+
+  <!-- 9. GLOSSARY -->
+  <section>
+    <div class="s-head"><h2>Glossary</h2></div>
+    <div class="glossary">
+      <div class="term-card"><div class="term">Retrieve</div><div class="term-def">token deciding whether retrieval is needed at all.</div></div>
+      <div class="term-card"><div class="term">ISREL</div><div class="term-def">token: is this specific chunk relevant?</div></div>
+      <div class="term-card"><div class="term">ISSUP</div><div class="term-def">token: is the answer supported by context? fully / partially / no_support.</div></div>
+      <div class="term-card"><div class="term">ISUSE</div><div class="term-def">token: does the supported answer actually address the question?</div></div>
+      <div class="term-card"><div class="term">revise_answer</div><div class="term-def">forces a strict quote-only rewrite when ISSUP fails.</div></div>
+      <div class="term-card"><div class="term">rewrite_question</div><div class="term-def">rewrites the retrieval query when ISUSE fails, then retries retrieval.</div></div>
+    </div>
+  </section>
+
+  <!-- 10. SELF TEST -->
+  <section>
+    <div class="s-head"><h2>Self-test</h2></div>
+    <details class="qa">
+      <summary>Why check ISSUP and ISUSE separately?</summary>
+      <div class="a">They catch different failures — ISSUP catches ungrounded wording even in an on-topic answer; ISUSE catches grounded-but-non-answering responses. One combined check would miss whichever failure mode isn't explicitly asked about.</div>
+    </details>
+    <details class="qa">
+      <summary>Why did the correct "14-day free trial" answer get marked no_support?</summary>
+      <div class="a">ISSUP grades literal textual grounding, not factual correctness — "supported" and "true" aren't the same check.</div>
+    </details>
+    <details class="qa">
+      <summary>What's the real difference between the ISSUP-revise loop and the ISUSE-rewrite loop?</summary>
+      <div class="a">revise_answer only changes the wording of the answer from the same context; rewrite_question changes the retrieval query and fetches new documents entirely.</div>
+    </details>
+    <details class="qa">
+      <summary>How does the web branch relate to CRAG's corrective action?</summary>
+      <div class="a">Same idea — replace bad retrieval with a web search — triggered by a different signal: CRAG uses an external evaluator's verdict, Self-RAG uses ISREL finding zero relevant chunks.</div>
+    </details>
+  </section>
+
+  <footer>corrective-rag · self-rag/notes/process.md companion</footer>
+</div>
+</body>
+</html>

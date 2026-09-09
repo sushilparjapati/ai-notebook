@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agentic RAG — Visual Revision Notes</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>%F0%9F%A4%96</text></svg>">
+<style>
+  :root{
+    --bg:#EEF0EA; --surface:#FFFFFF; --surface-2:#F4F5F0;
+    --ink:#1B2131; --ink-soft:#525A6B; --ink-faint:#8A8F7E; --rule:#D8D9CC;
+    --accent:#2E3F76; --accent-soft:#DEE3F2; --accent-strong:#1D2A57;
+    --stamp:#B23A2E; --stamp-soft:#F4DEDB;
+    --good:#2F7A4D; --good-soft:#DCEFE1;
+    --amber:#A9761F; --amber-soft:#F3E7D0;
+    --bad:#B23A2E; --bad-soft:#F4DEDB;
+    --shadow: 0 1px 2px rgba(27,33,49,0.06), 0 6px 20px rgba(27,33,49,0.05);
+    --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#14171B; --surface:#1B1F24; --surface-2:#20242A;
+      --ink:#E9EAE3; --ink-soft:#A6AC9E; --ink-faint:#6E7468; --rule:#33372F;
+      --accent:#8DA0E8; --accent-soft:#232B45; --accent-strong:#B7C4F2;
+      --stamp:#E2685C; --stamp-soft:#3A2320;
+      --good:#63C08A; --good-soft:#1E3126;
+      --amber:#E0AC4C; --amber-soft:#332A16;
+      --bad:#E2685C; --bad-soft:#3A2320;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{ background:var(--bg); color:var(--ink); font-family:var(--sans); line-height:1.55; -webkit-font-smoothing:antialiased; }
+  ::selection{background:var(--accent-soft); color:var(--ink);}
+  .page{max-width:900px;margin:0 auto;padding:64px 24px 96px;}
+
+  header.hero{ display:flex; align-items:flex-start; justify-content:space-between; gap:24px; padding-bottom:36px; border-bottom:1px solid var(--rule); margin-bottom:44px; }
+  .eyebrow{ font-family:var(--mono); font-size:11.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); margin:0 0 10px; }
+  h1{ font-family:var(--serif); font-weight:600; font-size:clamp(32px,5vw,44px); margin:0 0 10px; text-wrap:balance; letter-spacing:-0.01em; color:var(--ink); }
+  .dek{ color:var(--ink-soft); font-size:16px; max-width:54ch; margin:0; }
+  .stamp{ flex:none; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); border:2px solid var(--accent); border-radius:6px; padding:10px 14px; transform:rotate(4deg); white-space:nowrap; opacity:.9; margin-top:6px; }
+
+  section{ margin:0 0 56px; }
+  .s-head{ display:flex; align-items:baseline; gap:12px; margin-bottom:18px; }
+  h2{ font-family:var(--serif); font-size:23px; font-weight:600; margin:0; color:var(--ink); }
+  .s-lede{ color:var(--ink-soft); font-size:15px; margin:-8px 0 20px; max-width:64ch; }
+  .scroller{ overflow-x:auto; padding-bottom:4px; }
+
+  .compare{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:640px){ .compare{ grid-template-columns:1fr; } }
+  .cmp-card{ background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:20px; box-shadow:var(--shadow); }
+  .cmp-title{ display:flex; align-items:center; gap:8px; font-family:var(--serif); font-size:16px; font-weight:600; margin:0 0 4px;}
+  .badge{ display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; font-size:12px; flex:none; }
+  .badge.no{ background:var(--bad-soft); color:var(--bad); }
+  .badge.yes{ background:var(--good-soft); color:var(--good); }
+  .cmp-sub{ font-size:13px; color:var(--ink-soft); margin:0 0 16px; }
+  .mini-flow{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .node{ font-family:var(--mono); font-size:12px; background:var(--surface-2); border:1px solid var(--rule); border-radius:6px; padding:6px 10px; color:var(--ink); }
+  .node.hot{ border-color:var(--accent); color:var(--accent); background:var(--accent-soft); font-weight:600; }
+  .arrow{ color:var(--ink-faint); font-size:14px; }
+  .cmp-note{ margin-top:14px; font-size:13px; color:var(--ink-soft); border-top:1px dashed var(--rule); padding-top:12px; }
+  .cmp-note b{ color:var(--ink); }
+
+  .icon{ width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+  .pipeline{ display:flex; align-items:stretch; gap:0; min-width:860px; }
+  .p-node{ flex:1; min-width:104px; background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:12px 10px; box-shadow:var(--shadow); text-align:center; display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .p-node .icon{ color:var(--accent); }
+  .p-node b{ font-size:11.5px; }
+  .p-node span.sub{ font-size:10.5px; color:var(--ink-faint); }
+  .p-arrow{ display:flex; align-items:center; justify-content:center; width:22px; color:var(--ink-faint); font-size:15px; flex:none; }
+
+  table.tool-demo{ width:100%; border-collapse:collapse; font-size:13.5px; }
+  table.tool-demo th{ text-align:left; font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-faint); padding:8px 10px; border-bottom:1px solid var(--rule); }
+  table.tool-demo td{ padding:10px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  table.tool-demo tr:last-child td{ border-bottom:none; }
+  .pill{ display:inline-block; font-family:var(--mono); font-size:11px; font-weight:700; padding:3px 8px; border-radius:5px; background:var(--accent-soft); color:var(--accent); white-space:nowrap; }
+  .pill.both{ background:var(--good-soft); color:var(--good); }
+  .pill.none{ background:var(--surface-2); color:var(--ink-faint); }
+
+  .verdict-row{ display:flex; gap:16px; margin-top:16px; }
+  @media (max-width:640px){ .verdict-row{ flex-direction:column; } }
+  .verdict-col{ flex:1; background:var(--surface-2); border:1px solid var(--rule); border-radius:8px; padding:14px; }
+  .verdict-q{ font-family:var(--mono); font-size:11.5px; color:var(--ink-faint); margin-bottom:6px; }
+  .verdict-a{ font-size:13px; margin-bottom:8px; }
+  .verdict-tag{ display:inline-block; font-family:var(--mono); font-size:11px; font-weight:700; padding:3px 8px; border-radius:5px; }
+  .verdict-tag.good{ background:var(--good-soft); color:var(--good); }
+  .verdict-tag.bad{ background:var(--bad-soft); color:var(--bad); }
+  .verdict-tag.amber{ background:var(--amber-soft); color:var(--amber); }
+
+  .steps-box{ background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:18px 20px; box-shadow:var(--shadow); font-size:13px; }
+  .steps-box ol{ margin:0; padding-left:20px; }
+  .steps-box li{ margin-bottom:6px; color:var(--ink-soft); }
+  .steps-box li b{ color:var(--ink); }
+
+  .timeline{ position:relative; padding-left:28px; }
+  .timeline::before{ content:""; position:absolute; left:9px; top:6px; bottom:6px; width:2px; background:var(--rule); }
+  .t-item{ position:relative; padding-bottom:26px; }
+  .t-item:last-child{ padding-bottom:0; }
+  .t-item.final .t-dot{ background:var(--good-soft); border-color:var(--good); color:var(--good); }
+  .t-dot{ position:absolute; left:-28px; top:2px; width:20px; height:20px; border-radius:50%; background:var(--accent-soft); border:2px solid var(--accent); color:var(--accent); font-family:var(--mono); font-size:9.5px; display:flex; align-items:center; justify-content:center; font-weight:700; }
+  .t-file{ font-family:var(--mono); font-size:11.5px; color:var(--ink-faint); margin-bottom:2px; }
+  .t-title{ font-weight:600; font-size:14.5px; margin-bottom:3px; }
+  .t-desc{ font-size:13.5px; color:var(--ink-soft); }
+
+  .glossary{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+  @media (max-width:640px){ .glossary{ grid-template-columns:1fr; } }
+  .term-card{ background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:14px 16px; box-shadow:var(--shadow); }
+  .term{ font-family:var(--mono); font-size:13px; color:var(--accent); font-weight:700; margin-bottom:4px; }
+  .term-def{ font-size:13px; color:var(--ink-soft); }
+
+  details.qa{ background:var(--surface); border:1px solid var(--rule); border-radius:9px; padding:2px 16px; margin-bottom:10px; box-shadow:var(--shadow); }
+  details.qa summary{ cursor:pointer; list-style:none; padding:14px 0; font-size:14.5px; font-weight:600; display:flex; gap:10px; align-items:center; }
+  details.qa summary::-webkit-details-marker{ display:none; }
+  details.qa summary::before{ content:"Q"; font-family:var(--mono); font-size:11px; color:var(--accent); background:var(--accent-soft); width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex:none; }
+  details.qa[open] summary::before{ content:"–"; }
+  details.qa .a{ padding:0 0 16px 30px; font-size:13.5px; color:var(--ink-soft); }
+
+  footer{ margin-top:40px; padding-top:20px; border-top:1px solid var(--rule); font-size:12.5px; color:var(--ink-faint); font-family:var(--mono); }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Revision Notes · RAG Series</p>
+      <h1>Agentic RAG</h1>
+      <p class="dek">No fixed routing left — the model itself decides which tools to call, how many times, and in what order.</p>
+    </div>
+    <div class="stamp">Tool-Calling Loop</div>
+  </header>
+
+  <!-- 1. WHY -->
+  <section>
+    <div class="s-head"><h2>Why hand the routing to the model?</h2></div>
+    <p class="s-lede">CRAG and Self-RAG still run a fixed graph — a verdict or reflection token picks a branch you wrote in advance. Agentic RAG removes the preset branches entirely: the model calls real tools, on its own judgement, for as many rounds as it decides it needs.</p>
+    <div class="compare">
+      <div class="cmp-card">
+        <p class="cmp-title"><span class="badge no">✕</span> Fixed graph</p>
+        <p class="cmp-sub">CRAG / Self-RAG style</p>
+        <div class="mini-flow">
+          <span class="node">question</span><span class="arrow">→</span>
+          <span class="node hot">router node</span><span class="arrow">→</span>
+          <span class="node">retrieve</span><span class="arrow">→</span>
+          <span class="node">generate</span>
+        </div>
+        <p class="cmp-note">The routing logic is code you wrote in advance — an if/else, a threshold, a token.</p>
+      </div>
+      <div class="cmp-card">
+        <p class="cmp-title"><span class="badge yes">✓</span> Agentic RAG</p>
+        <p class="cmp-sub">tool-calling loop</p>
+        <div class="mini-flow">
+          <span class="node">question</span><span class="arrow">→</span>
+          <span class="node hot">agent (LLM)</span><span class="arrow">⇄</span>
+          <span class="node">tools</span><span class="arrow">→</span>
+          <span class="node">generate</span>
+        </div>
+        <p class="cmp-note">The routing logic <b>is</b> the model's own tool-call decision, made fresh every turn.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. TOOL DEMO -->
+  <section>
+    <div class="s-head"><h2>The agent decides: one tool, both, or neither</h2></div>
+    <p class="s-lede">Real runs from <code>02_tool_use_retrieval_1.ipynb</code> — same graph, four different questions.</p>
+    <table class="tool-demo">
+      <tr><th>Question</th><th>Tool(s) called</th><th>Result</th></tr>
+      <tr><td>"…impact of EVs on oil demand?"</td><td><span class="pill">vector_store_search</span></td><td>grounded in the PDF</td></tr>
+      <tr><td>"current temperature in New Delhi?"</td><td><span class="pill">web_search</span></td><td>grounded in live web results</td></tr>
+      <tr><td>"Compare EV report's 2030 projection <b>and</b> weather in Mumbai"</td><td><span class="pill both">both, same turn</span></td><td>one answer synthesizing both sources</td></tr>
+      <tr><td>"kinetic vs. potential energy"</td><td><span class="pill none">neither</span></td><td>skipped at route_question — general knowledge</td></tr>
+    </table>
+  </section>
+
+  <!-- 3. RETRY / EVALUATE -->
+  <section>
+    <div class="s-head"><h2>Evaluate → rewrite → retry</h2></div>
+    <p class="s-lede">After tool calls return, a relevance filter checks the docs (the same instinct as CRAG's evaluator / Self-RAG's ISREL) — and a failed check triggers a query rewrite, not a dead end.</p>
+    <div class="verdict-row">
+      <div class="verdict-col">
+        <div class="verdict-q">"how long people take to get rid of their vehicles completely as per the report?"</div>
+        <div class="verdict-a">informally phrased, but 1 relevant doc found immediately — no rewrite needed</div>
+        <span class="verdict-tag good">is_relevant: True (rewrite_count: 0)</span>
+      </div>
+      <div class="verdict-col">
+        <div class="verdict-q">"What does the report say about nuclear power?"</div>
+        <div class="verdict-a">off-topic for the PDF — triggers rewrite; the agent's <em>web_search</em> tool then pulls in a relevant nuclear-energy result</div>
+        <span class="verdict-tag amber">is_relevant: True after 2 rewrites</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. DECOMPOSITION -->
+  <section>
+    <div class="s-head"><h2>Query decomposition — split before you retrieve</h2></div>
+    <p class="s-lede">A compound question gets split into focused sub-queries <em>before</em> the agent starts calling tools — otherwise one retrieval call skews toward whichever topic dominates the embedding.</p>
+    <div class="steps-box">
+      <p style="margin:0 0 10px; font-family:var(--mono); font-size:11.5px; color:var(--ink-faint);">"Impact of EVs on the oil industry, and what is the current price of Brent Crude" → decomposed into:</p>
+      <ol>
+        <li><b>Step 1</b> historical impact of EV adoption on oil demand</li>
+        <li><b>Step 2</b> major energy outlooks' 2030/2040 projections</li>
+        <li><b>Step 3</b> gasoline/diesel consumption trends by market</li>
+        <li><b>Step 4</b> impacts on oil industry finances/capex</li>
+        <li><b>Step 5</b> effects on refining demand and margins</li>
+        <li><b>Step 6</b> how oil companies adjusted corporate strategy</li>
+        <li><b>Step 7</b> current spot price of Brent crude</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- 5. FULL PIPELINE -->
+  <section>
+    <div class="s-head"><h2>The full pipeline (final build)</h2></div>
+    <p class="s-lede">Every capability from steps 01–05, assembled — plus a dynamic prompt builder that adapts to what actually happened this turn.</p>
+    <div class="scroller">
+      <div class="pipeline">
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="7,12 10.5,15.5 17,8"/></svg>
+          <b>route</b><span class="sub">needs retrieval?</span>
+        </div>
+        <div class="p-arrow">→</div>
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="7,12 10.5,15.5 17,8"/></svg>
+          <b>decompose?</b><span class="sub">compound query</span>
+        </div>
+        <div class="p-arrow">→</div>
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="9" cy="9" r="4"/><circle cx="15" cy="9" r="4"/><path d="M4 20 Q12 12 20 20"/></svg>
+          <b>agent</b><span class="sub">⇄ tools loop</span>
+        </div>
+        <div class="p-arrow">→</div>
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="7,12 10.5,15.5 17,8"/></svg>
+          <b>evaluate</b><span class="sub">relevant?</span>
+        </div>
+        <div class="p-arrow">→</div>
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M4 20 L14 10 L17 13 L7 23 Z"/><line x1="14" y1="10" x2="17" y2="13"/></svg>
+          <b>rewrite</b><span class="sub">if not relevant</span>
+        </div>
+        <div class="p-arrow">→</div>
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M4 5 h16 v10 h-9 l-4 4 v-4 h-3 z"/></svg>
+          <b>build_prompt</b><span class="sub">+ generate</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. BUILD PROGRESSION -->
+  <section>
+    <div class="s-head"><h2>How it was built, one notebook at a time</h2></div>
+    <div class="timeline">
+      <div class="t-item"><div class="t-dot">00</div><div class="t-file">00_base_rag.ipynb</div><div class="t-title">Baseline</div><div class="t-desc">Always retrieve from one vector store, then generate.</div></div>
+      <div class="t-item"><div class="t-dot">01</div><div class="t-file">01_conditional_retrieval.ipynb</div><div class="t-title">+ route_question</div><div class="t-desc">Skip retrieval for general-knowledge questions.</div></div>
+      <div class="t-item"><div class="t-dot">02</div><div class="t-file">02_tool_use_retrieval_1.ipynb</div><div class="t-title">+ real tool-calling agent</div><div class="t-desc">Replace the fixed retrieve node with vector_store_search + web_search as callable tools.</div></div>
+      <div class="t-item"><div class="t-dot">03</div><div class="t-file">03_tool_use_retrieval_2.ipynb</div><div class="t-title">+ retrieval round cap</div><div class="t-desc">retrieval_count / max_retrieval_steps guard against infinite tool-call loops.</div></div>
+      <div class="t-item"><div class="t-dot">04</div><div class="t-file">04_retrieval_evaluation_and_rewriting.ipynb</div><div class="t-title">+ evaluate_docs / rewrite_query</div><div class="t-desc">Relevance filter plus a rewrite-and-retry loop.</div></div>
+      <div class="t-item"><div class="t-dot">05</div><div class="t-file">05_query_decomposition.ipynb</div><div class="t-title">+ query decomposition</div><div class="t-desc">Compound questions split into sub-queries before retrieval begins.</div></div>
+      <div class="t-item final"><div class="t-dot">✓</div><div class="t-file">agentic_rag.ipynb</div><div class="t-title">Final combined build</div><div class="t-desc">Adds build_prompt: dynamic system-prompt construction based on what happened this turn.</div></div>
+    </div>
+  </section>
+
+  <!-- 7. GLOSSARY -->
+  <section>
+    <div class="s-head"><h2>Glossary</h2></div>
+    <div class="glossary">
+      <div class="term-card"><div class="term">tool-calling agent</div><div class="term-def">an LLM bound to callable tools, deciding per-turn whether/which to call.</div></div>
+      <div class="term-card"><div class="term">vector_store_search / web_search</div><div class="term-def">the two tools available — internal corpus vs. live web.</div></div>
+      <div class="term-card"><div class="term">retrieval round</div><div class="term-def">one agent → tool → agent cycle; capped by max_retrieval_steps.</div></div>
+      <div class="term-card"><div class="term">evaluate_docs</div><div class="term-def">post-retrieval relevance filter — same idea as CRAG's evaluator.</div></div>
+      <div class="term-card"><div class="term">rewrite_query</div><div class="term-def">rephrases the question and retries when nothing relevant came back.</div></div>
+      <div class="term-card"><div class="term">build_prompt</div><div class="term-def">assembles the generation prompt from what happened this turn.</div></div>
+    </div>
+  </section>
+
+  <!-- 8. SELF TEST -->
+  <section>
+    <div class="s-head"><h2>Self-test</h2></div>
+    <details class="qa">
+      <summary>Why tool-calling instead of just more if/else branches?</summary>
+      <div class="a">Tool-calling lets the model decide, per query, how many tools to use and in what combination — the "both tools in one turn" case isn't expressible cleanly as a fixed set of hardcoded branches, especially as more tools get added.</div>
+    </details>
+    <details class="qa">
+      <summary>Why does the retry cap from step 03 matter if step 02 already worked fine?</summary>
+      <div class="a">An agent loop has no built-in stopping guarantee — the cap is a safety net for queries or models that keep generating tool calls without converging.</div>
+    </details>
+    <details class="qa">
+      <summary>Why decompose before retrieving, not after seeing an incomplete answer?</summary>
+      <div class="a">A single retrieval call on a multi-topic question skews toward whichever topic dominates the query's embedding, starving the other sub-topics of any retrieval at all.</div>
+    </details>
+    <details class="qa">
+      <summary>How does evaluate_docs/rewrite_query here relate to CRAG's evaluator and Self-RAG's ISREL loop?</summary>
+      <div class="a">Same underlying idea — grade retrieval, replace it with a better query if bad — but here it's one capability inside an open-ended agent loop, not the entire pipeline's structure.</div>
+    </details>
+  </section>
+
+  <footer>corrective-rag · agentic-rag/notes/process.md companion</footer>
+</div>
+</body>
+</html>

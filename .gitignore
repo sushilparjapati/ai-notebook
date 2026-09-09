@@ -1,0 +1,37 @@
+# --- Notes ---
+# OneNote PDF exports (~150MB, one file exceeds GitHub's 100MB limit).
+# Source of truth is Google Drive.
+advanced-rag/Notes/
+
+# --- Secrets ---
+.env
+.env.*
+!.env.example
+*.pem
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.python-version.local
+
+# --- Notebooks ---
+.ipynb_checkpoints/
+
+# --- Local vector stores / caches / checkpoints ---
+*.db
+*.sqlite
+*.sqlite3
+checkpoints.db
+chroma_db/
+.chroma/
+qdrant_storage/
+embedding_cache/
+cache/
+
+# --- OS / editor ---
+.DS_Store
+.idea/
+*.swp

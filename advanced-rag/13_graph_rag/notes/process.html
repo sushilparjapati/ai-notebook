@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Graph RAG — Visual Revision Notes</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>%F0%9F%95%B8%EF%B8%8F</text></svg>">
+<style>
+  :root{
+    --bg:#EEF0EA; --surface:#FFFFFF; --surface-2:#F4F5F0;
+    --ink:#1B2131; --ink-soft:#525A6B; --ink-faint:#8A8F7E; --rule:#D8D9CC;
+    --accent:#2E3F76; --accent-soft:#DEE3F2; --accent-strong:#1D2A57;
+    --stamp:#B23A2E; --stamp-soft:#F4DEDB;
+    --good:#2F7A4D; --good-soft:#DCEFE1;
+    --amber:#A9761F; --amber-soft:#F3E7D0;
+    --bad:#B23A2E; --bad-soft:#F4DEDB;
+    --shadow: 0 1px 2px rgba(27,33,49,0.06), 0 6px 20px rgba(27,33,49,0.05);
+    --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#14171B; --surface:#1B1F24; --surface-2:#20242A;
+      --ink:#E9EAE3; --ink-soft:#A6AC9E; --ink-faint:#6E7468; --rule:#33372F;
+      --accent:#8DA0E8; --accent-soft:#232B45; --accent-strong:#B7C4F2;
+      --stamp:#E2685C; --stamp-soft:#3A2320;
+      --good:#63C08A; --good-soft:#1E3126;
+      --amber:#E0AC4C; --amber-soft:#332A16;
+      --bad:#E2685C; --bad-soft:#3A2320;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{ background:var(--bg); color:var(--ink); font-family:var(--sans); line-height:1.55; -webkit-font-smoothing:antialiased; }
+  ::selection{background:var(--accent-soft); color:var(--ink);}
+  .page{max-width:900px;margin:0 auto;padding:64px 24px 96px;}
+
+  header.hero{ display:flex; align-items:flex-start; justify-content:space-between; gap:24px; padding-bottom:36px; border-bottom:1px solid var(--rule); margin-bottom:44px; }
+  .eyebrow{ font-family:var(--mono); font-size:11.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); margin:0 0 10px; }
+  h1{ font-family:var(--serif); font-weight:600; font-size:clamp(32px,5vw,44px); margin:0 0 10px; text-wrap:balance; letter-spacing:-0.01em; color:var(--ink); }
+  .dek{ color:var(--ink-soft); font-size:16px; max-width:54ch; margin:0; }
+  .stamp{ flex:none; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); border:2px solid var(--accent); border-radius:6px; padding:10px 14px; transform:rotate(4deg); white-space:nowrap; opacity:.9; margin-top:6px; }
+
+  section{ margin:0 0 56px; }
+  .s-head{ display:flex; align-items:baseline; gap:12px; margin-bottom:18px; }
+  h2{ font-family:var(--serif); font-size:23px; font-weight:600; margin:0; color:var(--ink); }
+  .s-lede{ color:var(--ink-soft); font-size:15px; margin:-8px 0 20px; max-width:64ch; }
+  .scroller{ overflow-x:auto; padding-bottom:4px; }
+
+  .compare{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:640px){ .compare{ grid-template-columns:1fr; } }
+  .cmp-card{ background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:20px; box-shadow:var(--shadow); }
+  .cmp-title{ display:flex; align-items:center; gap:8px; font-family:var(--serif); font-size:16px; font-weight:600; margin:0 0 4px;}
+  .badge{ display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%; font-size:12px; flex:none; }
+  .badge.no{ background:var(--bad-soft); color:var(--bad); }
+  .badge.yes{ background:var(--good-soft); color:var(--good); }
+  .cmp-sub{ font-size:13px; color:var(--ink-soft); margin:0 0 16px; }
+  .cmp-note{ margin-top:14px; font-size:13px; color:var(--ink-soft); border-top:1px dashed var(--rule); padding-top:12px; }
+  .cmp-note b{ color:var(--ink); }
+  .cmp-path{ font-family:var(--mono); font-size:12px; background:var(--surface-2); border:1px solid var(--rule); border-radius:6px; padding:10px; color:var(--ink); line-height:1.6; }
+
+  .icon{ width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+  .pipeline{ display:flex; align-items:stretch; gap:0; min-width:760px; }
+  .p-node{ flex:1; min-width:110px; background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:14px 12px; box-shadow:var(--shadow); text-align:center; display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .p-node .icon{ color:var(--accent); }
+  .p-node b{ font-size:12.5px; }
+  .p-node span.sub{ font-size:11px; color:var(--ink-faint); }
+  .p-arrow{ display:flex; align-items:center; justify-content:center; width:26px; color:var(--ink-faint); font-size:16px; flex:none; }
+
+  table.rule-table{ width:100%; border-collapse:collapse; font-size:13px; }
+  table.rule-table th{ text-align:left; font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-faint); padding:8px 10px; border-bottom:1px solid var(--rule); }
+  table.rule-table td{ padding:10px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  table.rule-table tr:last-child td{ border-bottom:none; }
+  table.rule-table code{ font-family:var(--mono); font-size:12px; background:var(--surface-2); padding:2px 5px; border-radius:4px; }
+
+  .hop-demo{ background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:18px 20px; box-shadow:var(--shadow); }
+  .hop-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 0; border-bottom:1px solid var(--rule); font-size:13px; }
+  .hop-row:last-child{ border-bottom:none; }
+  .hop-q{ flex:1; min-width:220px; color:var(--ink); }
+  .hop-path{ font-family:var(--mono); font-size:11.5px; color:var(--accent); background:var(--accent-soft); padding:4px 8px; border-radius:5px; white-space:nowrap; }
+  .hop-a{ font-weight:600; white-space:nowrap; }
+
+  .timeline{ position:relative; padding-left:28px; }
+  .timeline::before{ content:""; position:absolute; left:9px; top:6px; bottom:6px; width:2px; background:var(--rule); }
+  .t-item{ position:relative; padding-bottom:26px; }
+  .t-item:last-child{ padding-bottom:0; }
+  .t-dot{ position:absolute; left:-28px; top:2px; width:20px; height:20px; border-radius:50%; background:var(--accent-soft); border:2px solid var(--accent); color:var(--accent); font-family:var(--mono); font-size:10px; display:flex; align-items:center; justify-content:center; font-weight:700; }
+  .t-file{ font-family:var(--mono); font-size:11.5px; color:var(--ink-faint); margin-bottom:2px; }
+  .t-title{ font-weight:600; font-size:14.5px; margin-bottom:3px; }
+  .t-desc{ font-size:13.5px; color:var(--ink-soft); }
+
+  .glossary{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+  @media (max-width:640px){ .glossary{ grid-template-columns:1fr; } }
+  .term-card{ background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:14px 16px; box-shadow:var(--shadow); }
+  .term{ font-family:var(--mono); font-size:13px; color:var(--accent); font-weight:700; margin-bottom:4px; }
+  .term-def{ font-size:13px; color:var(--ink-soft); }
+
+  details.qa{ background:var(--surface); border:1px solid var(--rule); border-radius:9px; padding:2px 16px; margin-bottom:10px; box-shadow:var(--shadow); }
+  details.qa summary{ cursor:pointer; list-style:none; padding:14px 0; font-size:14.5px; font-weight:600; display:flex; gap:10px; align-items:center; }
+  details.qa summary::-webkit-details-marker{ display:none; }
+  details.qa summary::before{ content:"Q"; font-family:var(--mono); font-size:11px; color:var(--accent); background:var(--accent-soft); width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex:none; }
+  details.qa[open] summary::before{ content:"–"; }
+  details.qa .a{ padding:0 0 16px 30px; font-size:13.5px; color:var(--ink-soft); }
+
+  .warn-box{ background:var(--amber-soft); border:1px solid var(--amber); border-radius:8px; padding:12px 16px; font-size:13px; color:var(--ink); }
+
+  footer{ margin-top:40px; padding-top:20px; border-top:1px solid var(--rule); font-size:12.5px; color:var(--ink-faint); font-family:var(--mono); }
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Revision Notes · RAG Series</p>
+      <h1>Graph RAG</h1>
+      <p class="dek">Some answers are a path through several facts, not a single passage — so retrieval becomes a graph traversal, not a similarity search.</p>
+    </div>
+    <div class="stamp">Multi-Hop</div>
+  </header>
+
+  <div class="warn-box" style="margin-bottom:40px;">Requires a free Neo4j AuraDB instance before running — see <code>../SETUP.md</code>. Run <code>01_ingestion.ipynb</code> before <code>02_retrieval.ipynb</code>, or the graph is empty.</div>
+
+  <!-- 1. WHY -->
+  <section>
+    <div class="s-head"><h2>Why can't chunk similarity answer this?</h2></div>
+    <p class="s-lede">Every other technique in this repo retrieves by embedding similarity. That works when one passage contains the whole answer. It fails when the answer is a <em>chain</em> of facts spread across separate passages.</p>
+    <div class="compare">
+      <div class="cmp-card">
+        <p class="cmp-title"><span class="badge no">✕</span> Chunk similarity</p>
+        <p class="cmp-sub">"What product did the org whose board Elon Musk left release?"</p>
+        <div class="cmp-path">similarity search →<br>one chunk about "left the board"<br><b>or</b><br>one chunk about "released a product"<br>— never both at once</div>
+        <p class="cmp-note">No single chunk's embedding is close to the full question, because no chunk <b>contains</b> the two-step answer.</p>
+      </div>
+      <div class="cmp-card">
+        <p class="cmp-title"><span class="badge yes">✓</span> Graph traversal</p>
+        <p class="cmp-sub">same question</p>
+        <div class="cmp-path">Cypher: <br><code>Person -[LEFT_BOARD]-> Org -[RELEASED]-> Product</code><br>→ <b>Chatgpt</b></div>
+        <p class="cmp-note">The retrieval mechanism itself walks the two-hop path — because the index is a graph, not a bag of chunks.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. INGESTION -->
+  <section>
+    <div class="s-head"><h2>Ingestion — PDF to knowledge graph</h2></div>
+    <div class="scroller">
+      <div class="pipeline">
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6z"/><path d="M15 3v3h3"/></svg>
+          <b>PDF</b><span class="sub">2 pages</span>
+        </div>
+        <div class="p-arrow">→</div>
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="14" y2="12"/><line x1="4" y1="17" x2="18" y2="17"/></svg>
+          <b>chunk (300)</b><span class="sub">tight extraction context</span>
+        </div>
+        <div class="p-arrow">→</div>
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="7" cy="7" r="3"/><circle cx="17" cy="7" r="3"/><circle cx="12" cy="18" r="3"/><line x1="9.5" y1="8.5" x2="10" y2="15.5"/><line x1="14.5" y1="8.5" x2="14" y2="15.5"/></svg>
+          <b>LLMGraphTransformer</b><span class="sub">extract entities + relations</span>
+        </div>
+        <div class="p-arrow">→</div>
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="7" cy="7" r="3"/><circle cx="17" cy="7" r="3"/><circle cx="12" cy="18" r="3"/><line x1="9.5" y1="8.5" x2="10" y2="15.5"/><line x1="14.5" y1="8.5" x2="14" y2="15.5"/><line x1="10" y1="7" x2="14" y2="7"/></svg>
+          <b>Neo4j</b><span class="sub">stored property graph</span>
+        </div>
+      </div>
+    </div>
+    <p class="s-lede" style="margin-top:16px;">Real extraction from the first chunk:</p>
+    <div class="hop-demo">
+      <p style="font-family:var(--mono); font-size:12px; color:var(--ink-soft); margin:0;">Elon Musk —BORN_ON→ June 28, 1971 · —BORN_IN→ Pretoria, South Africa · —HAS_NATIONALITY→ American · —HAS_OCCUPATION→ Entrepreneur, Engineer · —RECOGNISED_AS→ World's Wealthiest Person</p>
+    </div>
+    <p class="s-lede" style="margin-top:14px;">From just 14 chunks, the full graph ended up with <b>18 node labels</b> and <b>40+ relationship types</b> — far richer than a flat chunk index.</p>
+  </section>
+
+  <!-- 3. CYPHER RULES -->
+  <section>
+    <div class="s-head"><h2>Retrieval — the Cypher-generation gotchas</h2></div>
+    <p class="s-lede">The question → Cypher prompt is hand-tuned with rules the model got wrong by default. Worth knowing as real graph-RAG lessons, not just theory.</p>
+    <table class="rule-table">
+      <tr><th>Rule</th><th>Why it's needed</th></tr>
+      <tr><td><code>[:TYPE1|TYPE2]</code> — colon only on first type</td><td>Neo4j 5+ syntax; a colon before every type is an error</td></tr>
+      <tr><td><code>toLower(n.id) = toLower("SpaceX")</code></td><td><code>LLMGraphTransformer</code> title-cases ids ("SpaceX" → "Spacex") — exact match silently returns nothing</td></tr>
+      <tr><td><code>toLower(p.id) CONTAINS 'elon' AND CONTAINS 'musk'</code></td><td>names get stored in partial/abbreviated forms across chunks</td></tr>
+    </table>
+  </section>
+
+  <!-- 4. HOP DEMO -->
+  <section>
+    <div class="s-head"><h2>Single-hop vs. multi-hop, real answers</h2></div>
+    <div class="hop-demo">
+      <div class="hop-row"><div class="hop-q">"Where is SpaceX HQ located?" <span style="color:var(--ink-faint);">(single-hop)</span></div><div class="hop-path">Org -HQ-> Location</div><div class="hop-a">Hawthorne, CA</div></div>
+      <div class="hop-row"><div class="hop-q">"Product released by the org whose board Musk left?"</div><div class="hop-path">Person -LEFT_BOARD-> Org -RELEASED-> Product</div><div class="hop-a">Chatgpt</div></div>
+      <div class="hop-row"><div class="hop-q">"Where is Musk's partner Shivon Zilis a director?"</div><div class="hop-path">Person -PARTNER- Person -DIRECTOR-> Org</div><div class="hop-a">Neuralink</div></div>
+      <div class="hop-row"><div class="hop-q">"City of the solar company Tesla acquired?"</div><div class="hop-path">Org -ACQUIRED-> Org -HQ-> Location</div><div class="hop-a">San Mateo, CA</div></div>
+    </div>
+    <p class="s-lede" style="margin-top:14px;">None of the three multi-hop answers exist as a single sentence anywhere in the source PDF.</p>
+  </section>
+
+  <!-- 5. BUILD PROGRESSION -->
+  <section>
+    <div class="s-head"><h2>The two notebooks</h2></div>
+    <div class="timeline">
+      <div class="t-item"><div class="t-dot">1</div><div class="t-file">01_ingestion.ipynb</div><div class="t-title">Build the graph</div><div class="t-desc">Load → chunk small → extract entities/relations → store in Neo4j → vector-index the source chunks too.</div></div>
+      <div class="t-item"><div class="t-dot">2</div><div class="t-file">02_retrieval.ipynb</div><div class="t-title">Query the graph</div><div class="t-desc">refresh_schema() → schema-aware Cypher prompt → GraphCypherQAChain → single-hop and multi-hop Q&amp;A.</div></div>
+    </div>
+  </section>
+
+  <!-- 6. GLOSSARY -->
+  <section>
+    <div class="s-head"><h2>Glossary</h2></div>
+    <div class="glossary">
+      <div class="term-card"><div class="term">LLMGraphTransformer</div><div class="term-def">extracts (entity, relation, entity) triples from chunks via an LLM.</div></div>
+      <div class="term-card"><div class="term">Neo4jGraph</div><div class="term-def">connection wrapper for storing/querying the graph in Neo4j.</div></div>
+      <div class="term-card"><div class="term">include_source=True</div><div class="term-def">links entities back to their source chunk — needed for the vector index step.</div></div>
+      <div class="term-card"><div class="term">GraphCypherQAChain</div><div class="term-def">question → generated Cypher → execute → natural-language answer.</div></div>
+      <div class="term-card"><div class="term">multi-hop question</div><div class="term-def">answer requires traversing 2+ relationships not co-located in one passage.</div></div>
+      <div class="term-card"><div class="term">Neo4jVector.from_existing_graph</div><div class="term-def">builds a similarity index over the same graph's Document nodes.</div></div>
+    </div>
+  </section>
+
+  <!-- 7. SELF TEST -->
+  <section>
+    <div class="s-head"><h2>Self-test</h2></div>
+    <details class="qa">
+      <summary>Why does chunk-similarity retrieval fail on the "board → product" question?</summary>
+      <div class="a">The sentence about leaving the board and the sentence about the product release are in different, unrelated chunks — no chunk's embedding is close to the full question because no chunk contains the two-step answer.</div>
+    </details>
+    <details class="qa">
+      <summary>Why title-case and CONTAINS matching instead of exact match?</summary>
+      <div class="a">LLMGraphTransformer normalizes entity ids inconsistently across extraction calls (case, partial names) — the query layer has to compensate, or real matches get silently missed.</div>
+    </details>
+    <details class="qa">
+      <summary>Why also build a vector index over Document nodes if retrieval uses Cypher?</summary>
+      <div class="a">Keeps hybrid retrieval possible from the same ingested data — similarity search for open-ended questions, graph traversal for multi-hop ones. This build only exercises the Cypher path.</div>
+    </details>
+    <details class="qa">
+      <summary>How does this differ from Microsoft's "GraphRAG" (community summaries)?</summary>
+      <div class="a">That variant clusters the graph and summarizes each cluster for global thematic questions. This build traverses the raw graph directly per-question for multi-hop factual questions — same "build a graph first" instinct, different downstream use.</div>
+    </details>
+  </section>
+
+  <footer>corrective-rag · graph-rag/notes/process.md companion</footer>
+</div>
+</body>
+</html>

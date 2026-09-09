@@ -1,0 +1,4 @@
+# Extra deps beyond the shared ../requirements.txt at repo root.
+langchain-chroma
+chromadb
+tavily-python

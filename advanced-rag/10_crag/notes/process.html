@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Corrective RAG — Visual Revision Notes</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>%E2%9C%8F%EF%B8%8F</text></svg>">
+<style>
+  :root{
+    --bg:#EEF0EA;
+    --surface:#FFFFFF;
+    --surface-2:#F4F5F0;
+    --ink:#1B2131;
+    --ink-soft:#525A6B;
+    --ink-faint:#8A8F7E;
+    --rule:#D8D9CC;
+    --accent:#2E3F76;
+    --accent-soft:#DEE3F2;
+    --accent-strong:#1D2A57;
+    --stamp:#B23A2E;
+    --stamp-soft:#F4DEDB;
+    --good:#2F7A4D;
+    --good-soft:#DCEFE1;
+    --amber:#A9761F;
+    --amber-soft:#F3E7D0;
+    --bad:#B23A2E;
+    --bad-soft:#F4DEDB;
+    --shadow: 0 1px 2px rgba(27,33,49,0.06), 0 6px 20px rgba(27,33,49,0.05);
+    --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Georgia, "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --bg:#14171B;
+      --surface:#1B1F24;
+      --surface-2:#20242A;
+      --ink:#E9EAE3;
+      --ink-soft:#A6AC9E;
+      --ink-faint:#6E7468;
+      --rule:#33372F;
+      --accent:#8DA0E8;
+      --accent-soft:#232B45;
+      --accent-strong:#B7C4F2;
+      --stamp:#E2685C;
+      --stamp-soft:#3A2320;
+      --good:#63C08A;
+      --good-soft:#1E3126;
+      --amber:#E0AC4C;
+      --amber-soft:#332A16;
+      --bad:#E2685C;
+      --bad-soft:#3A2320;
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+    }
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--sans);
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:var(--accent-soft); color:var(--ink);}
+
+  .page{max-width:900px;margin:0 auto;padding:64px 24px 96px;}
+
+  /* ---------- Header ---------- */
+  header.hero{
+    display:flex; align-items:flex-start; justify-content:space-between; gap:24px;
+    padding-bottom:36px; border-bottom:1px solid var(--rule); margin-bottom:44px;
+  }
+  .eyebrow{
+    font-family:var(--mono); font-size:11.5px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--ink-faint); margin:0 0 10px;
+  }
+  h1{
+    font-family:var(--serif); font-weight:600; font-size:clamp(32px,5vw,44px);
+    margin:0 0 10px; text-wrap:balance; letter-spacing:-0.01em; color:var(--ink);
+  }
+  .dek{ color:var(--ink-soft); font-size:16px; max-width:52ch; margin:0; }
+  .stamp{
+    flex:none; font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--stamp); border:2px solid var(--stamp); border-radius:6px; padding:10px 14px;
+    transform:rotate(4deg); white-space:nowrap; opacity:.9; margin-top:6px;
+  }
+
+  /* ---------- Section scaffolding ---------- */
+  section{ margin:0 0 56px; }
+  .s-head{ display:flex; align-items:baseline; gap:12px; margin-bottom:18px; }
+  h2{
+    font-family:var(--serif); font-size:23px; font-weight:600; margin:0; color:var(--ink);
+  }
+  .s-lede{ color:var(--ink-soft); font-size:15px; margin:-8px 0 20px; max-width:62ch; }
+
+  .scroller{ overflow-x:auto; padding-bottom:4px; }
+
+  /* ---------- Why CRAG: comparison cards ---------- */
+  .compare{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:640px){ .compare{ grid-template-columns:1fr; } }
+  .cmp-card{
+    background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:20px;
+    box-shadow:var(--shadow); position:relative;
+  }
+  .cmp-title{ display:flex; align-items:center; gap:8px; font-family:var(--serif); font-size:16px; font-weight:600; margin:0 0 4px;}
+  .badge{
+    display:inline-flex; align-items:center; justify-content:center; width:20px; height:20px; border-radius:50%;
+    font-size:12px; flex:none;
+  }
+  .badge.no{ background:var(--bad-soft); color:var(--bad); }
+  .badge.yes{ background:var(--good-soft); color:var(--good); }
+  .cmp-sub{ font-size:13px; color:var(--ink-soft); margin:0 0 16px; }
+  .mini-flow{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .node{
+    font-family:var(--mono); font-size:12px; background:var(--surface-2); border:1px solid var(--rule);
+    border-radius:6px; padding:6px 10px; color:var(--ink);
+  }
+  .node.hot{ border-color:var(--accent); color:var(--accent); background:var(--accent-soft); font-weight:600; }
+  .arrow{ color:var(--ink-faint); font-size:14px; }
+  .cmp-note{ margin-top:14px; font-size:13px; color:var(--ink-soft); border-top:1px dashed var(--rule); padding-top:12px; }
+  .cmp-note b{ color:var(--ink); }
+
+  /* ---------- Verdict traffic light ---------- */
+  .lights{ display:flex; gap:16px; }
+  @media (max-width:700px){ .lights{ flex-direction:column; } }
+  .light-col{
+    flex:1; background:var(--surface); border:1px solid var(--rule); border-radius:10px;
+    padding:20px; box-shadow:var(--shadow); text-align:center; display:flex; flex-direction:column; align-items:center;
+  }
+  .signal{ width:34px; height:34px; border-radius:50%; margin-bottom:12px; box-shadow: inset 0 0 0 3px rgba(0,0,0,0.08); }
+  .signal.good{ background:var(--good); }
+  .signal.amber{ background:var(--amber); }
+  .signal.bad{ background:var(--bad); }
+  .light-label{ font-family:var(--mono); font-size:12px; letter-spacing:.08em; text-transform:uppercase; margin-bottom:6px; }
+  .light-label.good{ color:var(--good); } .light-label.amber{ color:var(--amber); } .light-label.bad{ color:var(--bad); }
+  .light-cond{ font-size:13.5px; color:var(--ink-soft); margin-bottom:14px; min-height:38px; }
+  .light-arrow{ color:var(--ink-faint); margin-bottom:10px; }
+  .light-action{
+    font-size:13.5px; background:var(--surface-2); border:1px solid var(--rule); border-radius:8px;
+    padding:10px 12px; color:var(--ink);
+  }
+
+  /* ---------- Icon nodes (pipeline + refine) ---------- */
+  .icon{ width:20px; height:20px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+
+  /* ---------- Pipeline diagram ---------- */
+  .pipeline{ display:flex; align-items:stretch; gap:0; min-width:760px; }
+  .p-node{
+    flex:1; min-width:110px; background:var(--surface); border:1px solid var(--rule); border-radius:10px;
+    padding:14px 12px; box-shadow:var(--shadow); text-align:center; display:flex; flex-direction:column; align-items:center; gap:8px;
+  }
+  .p-node .icon{ color:var(--accent); }
+  .p-node b{ font-size:13px; }
+  .p-node span.sub{ font-size:11.5px; color:var(--ink-faint); }
+  .p-arrow{ display:flex; align-items:center; justify-content:center; width:28px; color:var(--ink-faint); font-size:16px; flex:none; }
+  .branch-wrap{ min-width:760px; margin-top:14px; }
+  .branch{ display:flex; gap:12px; }
+  .branch .light-col{ padding:14px; }
+  .branch .signal{ width:22px; height:22px; margin-bottom:8px; }
+  .branch .light-cond{ min-height:0; font-size:12.5px; margin-bottom:10px; }
+  .branch .light-action{ font-size:12.5px; padding:8px 10px; }
+
+  /* ---------- Refine / strips demo ---------- */
+  .strip-demo{ background:var(--surface); border:1px solid var(--rule); border-radius:10px; padding:20px; box-shadow:var(--shadow); }
+  .strip-q{ font-family:var(--mono); font-size:12.5px; color:var(--ink-faint); margin-bottom:14px; }
+  .strip-q em{ color:var(--ink); font-style:normal; font-weight:600; }
+  .strip{
+    display:flex; align-items:flex-start; gap:10px; padding:9px 10px; border-radius:7px; margin-bottom:6px; font-size:13.5px;
+  }
+  .strip.keep{ background:var(--good-soft); }
+  .strip.drop{ background:transparent; color:var(--ink-faint); }
+  .strip.drop .txt{ text-decoration:line-through; text-decoration-color:var(--ink-faint); }
+  .strip .tag{ font-family:var(--mono); font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; flex:none; width:44px; padding-top:1px; }
+  .strip.keep .tag{ color:var(--good); } .strip.drop .tag{ color:var(--ink-faint); }
+  .recompose{
+    margin-top:16px; padding-top:14px; border-top:1px dashed var(--rule);
+    font-size:13.5px; color:var(--ink-soft);
+  }
+  .recompose b{ color:var(--ink); font-family:var(--mono); font-size:11.5px; text-transform:uppercase; letter-spacing:.06em; display:block; margin-bottom:8px;}
+
+  /* ---------- Timeline (build progression) ---------- */
+  .timeline{ position:relative; padding-left:28px; }
+  .timeline::before{ content:""; position:absolute; left:9px; top:6px; bottom:6px; width:2px; background:var(--rule); }
+  .t-item{ position:relative; padding-bottom:26px; }
+  .t-item:last-child{ padding-bottom:0; }
+  .t-dot{
+    position:absolute; left:-28px; top:2px; width:20px; height:20px; border-radius:50%;
+    background:var(--accent-soft); border:2px solid var(--accent); color:var(--accent);
+    font-family:var(--mono); font-size:10px; display:flex; align-items:center; justify-content:center; font-weight:700;
+  }
+  .t-file{ font-family:var(--mono); font-size:11.5px; color:var(--ink-faint); margin-bottom:2px; }
+  .t-title{ font-weight:600; font-size:14.5px; margin-bottom:3px; }
+  .t-desc{ font-size:13.5px; color:var(--ink-soft); }
+
+  /* ---------- Glossary ---------- */
+  .glossary{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+  @media (max-width:640px){ .glossary{ grid-template-columns:1fr; } }
+  .term-card{ background:var(--surface); border:1px solid var(--rule); border-radius:8px; padding:14px 16px; box-shadow:var(--shadow); }
+  .term{ font-family:var(--mono); font-size:13px; color:var(--accent); font-weight:700; margin-bottom:4px; }
+  .term-def{ font-size:13px; color:var(--ink-soft); }
+
+  /* ---------- Self test ---------- */
+  details.qa{
+    background:var(--surface); border:1px solid var(--rule); border-radius:9px; padding:2px 16px;
+    margin-bottom:10px; box-shadow:var(--shadow);
+  }
+  details.qa summary{
+    cursor:pointer; list-style:none; padding:14px 0; font-size:14.5px; font-weight:600; display:flex; gap:10px; align-items:center;
+  }
+  details.qa summary::-webkit-details-marker{ display:none; }
+  details.qa summary::before{
+    content:"Q"; font-family:var(--mono); font-size:11px; color:var(--accent); background:var(--accent-soft);
+    width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex:none;
+  }
+  details.qa[open] summary::before{ content:"–"; }
+  details.qa .a{ padding:0 0 16px 30px; font-size:13.5px; color:var(--ink-soft); }
+
+  footer{ margin-top:40px; padding-top:20px; border-top:1px solid var(--rule); font-size:12.5px; color:var(--ink-faint); font-family:var(--mono); }
+
+  @media (prefers-reduced-motion: reduce){ *{ transition:none !important; } }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="hero">
+    <div>
+      <p class="eyebrow">Revision Notes · RAG Series</p>
+      <h1>Corrective RAG</h1>
+      <p class="dek">A retriever that checks its own work — graded, corrected, and re-sourced before it's allowed to answer.</p>
+    </div>
+    <div class="stamp">Self-Correcting</div>
+  </header>
+
+  <!-- 1. WHY -->
+  <section>
+    <div class="s-head"><h2>Why bother correcting retrieval?</h2></div>
+    <p class="s-lede">Plain RAG retrieves once and trusts it completely. CRAG grades what came back before letting it near the answer.</p>
+    <div class="compare">
+      <div class="cmp-card">
+        <p class="cmp-title"><span class="badge no">✕</span> Naive RAG</p>
+        <p class="cmp-sub">retrieves once, never checks</p>
+        <div class="mini-flow">
+          <span class="node">question</span><span class="arrow">→</span>
+          <span class="node">retrieve</span><span class="arrow">→</span>
+          <span class="node hot">generate</span>
+        </div>
+        <p class="cmp-note">If the 4 retrieved chunks are irrelevant, <b>the model never finds out</b> — it answers from them anyway.</p>
+      </div>
+      <div class="cmp-card">
+        <p class="cmp-title"><span class="badge yes">✓</span> Corrective RAG</p>
+        <p class="cmp-sub">retrieves, grades, then decides</p>
+        <div class="mini-flow">
+          <span class="node">question</span><span class="arrow">→</span>
+          <span class="node">retrieve</span><span class="arrow">→</span>
+          <span class="node hot">evaluate</span><span class="arrow">→</span>
+          <span class="node">⋯</span>
+        </div>
+        <p class="cmp-note">A grade decides what happens next: <b>trust it</b>, <b>replace it</b> with a web search, or <b>blend both</b>.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. VERDICTS -->
+  <section>
+    <div class="s-head"><h2>The evaluator's three verdicts</h2></div>
+    <p class="s-lede">Each retrieved chunk gets a relevance score 0–1. Two thresholds (0.7 / 0.3) turn the set of scores into one verdict — like a traffic light for what happens next.</p>
+    <div class="lights">
+      <div class="light-col">
+        <div class="signal good"></div>
+        <div class="light-label good">Correct</div>
+        <div class="light-cond">at least one chunk scores &gt; 0.7</div>
+        <div class="light-arrow">↓</div>
+        <div class="light-action">refine internal docs, answer from them</div>
+      </div>
+      <div class="light-col">
+        <div class="signal amber"></div>
+        <div class="light-label amber">Ambiguous</div>
+        <div class="light-cond">mixed — nothing great, not all bad</div>
+        <div class="light-arrow">↓</div>
+        <div class="light-action">refine internal docs <b>+</b> search the web, combine</div>
+      </div>
+      <div class="light-col">
+        <div class="signal bad"></div>
+        <div class="light-label bad">Incorrect</div>
+        <div class="light-cond">every chunk scores &lt; 0.3</div>
+        <div class="light-arrow">↓</div>
+        <div class="light-action">discard internal docs, search the web instead</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. REFINE DEMO -->
+  <section>
+    <div class="s-head"><h2>Knowledge refinement — decompose → filter → recompose</h2></div>
+    <p class="s-lede">A retrieved chunk is rarely 100% relevant. CRAG splits it into sentence "strips," keeps only the ones that answer the question, then glues those back together.</p>
+    <div class="strip-demo">
+      <p class="strip-q">question → <em>“Explain the bias–variance tradeoff”</em></p>
+
+      <div class="strip keep"><span class="tag">keep</span><span class="txt">"Bias… is due to wrong assumptions, such as assuming the data is linear when it is actually quadratic."</span></div>
+      <div class="strip keep"><span class="tag">keep</span><span class="txt">"A high-bias model is most likely to underfit the training data."</span></div>
+      <div class="strip drop"><span class="tag">drop</span><span class="txt">"Irreducible error — this part is due to the noisiness of the data itself."</span></div>
+      <div class="strip drop"><span class="tag">drop</span><span class="txt">"Regularized Linear Models — a good way to reduce overfitting is to regularize the model."</span></div>
+      <div class="strip keep"><span class="tag">keep</span><span class="txt">"There is a trade-off between bias and variance… flexible models have low bias and high variance."</span></div>
+
+      <div class="recompose"><b>Recomposed → refined_context</b>Only the 3 kept sentences are joined and handed to the generator — the tangents about irreducible error and regularization never reach the prompt.</div>
+    </div>
+  </section>
+
+  <!-- 4. FULL PIPELINE -->
+  <section>
+    <div class="s-head"><h2>The full pipeline</h2></div>
+    <p class="s-lede">Every path — correct, ambiguous, or incorrect — funnels through the same refine step before an answer is generated.</p>
+    <div class="scroller">
+      <div class="pipeline">
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><line x1="15" y1="15" x2="20" y2="20"/></svg>
+          <b>Retrieve</b><span class="sub">vector search, k=4</span>
+        </div>
+        <div class="p-arrow">→</div>
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="7,12 10.5,15.5 17,8"/></svg>
+          <b>Evaluate</b><span class="sub">score each chunk</span>
+        </div>
+        <div class="p-arrow">→</div>
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M4 20 L14 10 L17 13 L7 23 Z"/><line x1="14" y1="10" x2="17" y2="13"/></svg>
+          <b>Rewrite</b><span class="sub">query → keywords</span>
+        </div>
+        <div class="p-arrow">→</div>
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><line x1="3" y1="12" x2="21" y2="12"/></svg>
+          <b>Web search</b><span class="sub">Tavily</span>
+        </div>
+        <div class="p-arrow">→</div>
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="13" y2="12" opacity="0.35"/><line x1="4" y1="17" x2="18" y2="17"/></svg>
+          <b>Refine</b><span class="sub">strips filter</span>
+        </div>
+        <div class="p-arrow">→</div>
+        <div class="p-node">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M4 5 h16 v10 h-9 l-4 4 v-4 h-3 z"/></svg>
+          <b>Generate</b><span class="sub">final answer</span>
+        </div>
+      </div>
+
+      <div class="branch-wrap">
+        <div class="branch">
+          <div class="light-col"><div class="signal good"></div><div class="light-label good">Correct</div>
+            <div class="light-cond">skips rewrite + web search entirely</div>
+            <div class="light-action">Evaluate → Refine (internal only) → Generate</div>
+          </div>
+          <div class="light-col"><div class="signal amber"></div><div class="light-label amber">Ambiguous</div>
+            <div class="light-cond">takes the full detour, then merges</div>
+            <div class="light-action">Evaluate → Rewrite → Web search → Refine (internal + web) → Generate</div>
+          </div>
+          <div class="light-col"><div class="signal bad"></div><div class="light-label bad">Incorrect</div>
+            <div class="light-cond">internal docs are dropped entirely</div>
+            <div class="light-action">Evaluate → Rewrite → Web search → Refine (web only) → Generate</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. BUILD PROGRESSION -->
+  <section>
+    <div class="s-head"><h2>How the pipeline was built, one notebook at a time</h2></div>
+    <p class="s-lede">Each notebook adds exactly one new piece on top of the last — the order matters.</p>
+    <div class="timeline">
+      <div class="t-item">
+        <div class="t-dot">1</div>
+        <div class="t-file">1_basic_rag.ipynb</div>
+        <div class="t-title">Naive RAG (the baseline problem)</div>
+        <div class="t-desc">retrieve → generate. No grading, no filtering — whatever comes back is trusted.</div>
+      </div>
+      <div class="t-item">
+        <div class="t-dot">2</div>
+        <div class="t-file">2_retrieval_refinement.ipynb</div>
+        <div class="t-title">+ Knowledge refinement</div>
+        <div class="t-desc">Adds decompose → filter → recompose, on every retrieval, before there's even an evaluator.</div>
+      </div>
+      <div class="t-item">
+        <div class="t-dot">3</div>
+        <div class="t-file">3_retrieval_evaluator.ipynb</div>
+        <div class="t-title">+ Retrieval evaluator & verdicts</div>
+        <div class="t-desc">Per-chunk scoring + UPPER_TH/LOWER_TH → CORRECT / INCORRECT / AMBIGUOUS. The other two verdicts just stop here.</div>
+      </div>
+      <div class="t-item">
+        <div class="t-dot">4</div>
+        <div class="t-file">4_web_search_refinement.ipynb</div>
+        <div class="t-title">+ Web search as the corrective action</div>
+        <div class="t-desc">INCORRECT now triggers a real Tavily search instead of failing.</div>
+      </div>
+      <div class="t-item">
+        <div class="t-dot">5</div>
+        <div class="t-file">5_query_rewrite.ipynb</div>
+        <div class="t-title">+ Query rewrite before search</div>
+        <div class="t-desc">The raw question is rewritten into a short keyword query (with a recency hint) before hitting the web.</div>
+      </div>
+      <div class="t-item">
+        <div class="t-dot">6</div>
+        <div class="t-file">6_ambiguous.ipynb</div>
+        <div class="t-title">+ Ambiguous merge (complete CRAG)</div>
+        <div class="t-desc">AMBIGUOUS stops dead-ending: it now takes the same web detour, then refine() merges internal + web docs.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. GLOSSARY -->
+  <section>
+    <div class="s-head"><h2>Glossary</h2></div>
+    <div class="glossary">
+      <div class="term-card"><div class="term">strips</div><div class="term-def">Sentences produced by splitting a chunk — the smallest unit CRAG filters at.</div></div>
+      <div class="term-card"><div class="term">refine()</div><div class="term-def">Decompose → filter → recompose: the knowledge-refinement step every path shares.</div></div>
+      <div class="term-card"><div class="term">verdict</div><div class="term-def">CORRECT / INCORRECT / AMBIGUOUS — the 3-way call derived from chunk scores.</div></div>
+      <div class="term-card"><div class="term">UPPER_TH / LOWER_TH</div><div class="term-def">0.7 and 0.3 — the two cutoffs that turn scores into a verdict.</div></div>
+      <div class="term-card"><div class="term">query rewrite</div><div class="term-def">Turning a natural question into a short keyword query for the web search tool.</div></div>
+      <div class="term-card"><div class="term">corrective action</div><div class="term-def">The paper's term for "go get better knowledge" — here, a web search.</div></div>
+    </div>
+  </section>
+
+  <!-- 7. SELF TEST -->
+  <section>
+    <div class="s-head"><h2>Self-test</h2></div>
+    <details class="qa">
+      <summary>Why not just always web search and skip the evaluator?</summary>
+      <div class="a">When internal retrieval is already good, web search only adds latency, cost, and less-curated sources. The evaluator lets you keep the cheap internal path whenever it's actually sufficient.</div>
+    </details>
+    <details class="qa">
+      <summary>Why filter sentence-by-sentence instead of whole chunks?</summary>
+      <div class="a">A chunk is rarely all-relevant or all-irrelevant. Sentence-level filtering keeps the one useful line inside an otherwise noisy chunk, instead of keeping (or discarding) the whole thing.</div>
+    </details>
+    <details class="qa">
+      <summary>What's the real difference between how INCORRECT and AMBIGUOUS are handled?</summary>
+      <div class="a">Both trigger rewrite → web search. The difference is only inside refine(): INCORRECT uses web_docs only; AMBIGUOUS uses good_docs + web_docs together.</div>
+    </details>
+    <details class="qa">
+      <summary>What do the two thresholds actually gate?</summary>
+      <div class="a">UPPER_TH (0.7) asks "is any single chunk good enough to trust alone?" → CORRECT. LOWER_TH (0.3) asks "is this chunk worth keeping at all?" — used both for the INCORRECT check (all below it) and for building good_docs (kept if above it).</div>
+    </details>
+  </section>
+
+  <footer>corrective-rag · process.md companion</footer>
+</div>
+</body>
+</html>

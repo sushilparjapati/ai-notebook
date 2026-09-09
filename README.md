@@ -6,6 +6,7 @@ A growing collection of AI/ML notebooks and experiments — one folder per topic
 
 | Folder | Topic |
 |---|---|
+| [advanced-rag](advanced-rag/) | Complete RAG curriculum (17 modules) + 4 original implementations + a deployed capstone project |
 | [qlora-finetuning](qlora-finetuning/) | QLoRA fine-tuning experiments |
 | [lora-bert-classification](lora-bert-classification/) | LoRA + BERT classification |
 | [langgraph](langgraph/) | Workflow patterns: sequential, conditional, parallel, iterative, tool-augmented |
